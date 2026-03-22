@@ -1,39 +1,45 @@
-# KNN với bỏ phiếu có trọng số theo cosine (AG News)
+# KNN Weight (Text Classification)
 
-## Tóm tắt
 
-Dự án này trình bày một biến thể đơn giản của KNN cho bài toán phân loại văn bản: thay vì bỏ phiếu “đếm phiếu” (majority vote) trong $k$ láng giềng gần nhất, ta dùng **bỏ phiếu có trọng số theo độ tương đồng cosine**. Đặc trưng văn bản được mã hoá bằng TF‑IDF, và độ gần được tính bằng cosine similarity.
-
-Mục tiêu chính: cung cấp một baseline KNN rõ ràng + một cải tiến nhẹ (weighted voting) để so sánh thực nghiệm trên AG News.
-
+Mục tiêu: thử nghiệm KNN cho bài toán phân loại văn bản theo hướng **cosine similarity** trên đặc trưng **TF‑IDF**, đồng thời so sánh:
+- **KNN_Optimized**: bỏ phiếu đa số (majority vote) trên top‑k láng giềng.
+- **KNN_WeightedCosine**: bỏ phiếu có trọng số (weighted vote) theo độ tương tự cosine.
 ## Tài nguyên
 
 - Notebook Colab (tham khảo/nguồn ý tưởng): https://colab.research.google.com/drive/1mNqr5vSHXIeetL-HozczCnukJTvro27M?usp=sharing
-- Notebook trong repo: [KNN_Impove.ipynb](KNN_Impove.ipynb)
+## Ý tưởng & cải tiến chính
 
-## Dataset
+### 1) Biểu diễn văn bản bằng TF‑IDF
 
-Sử dụng **AG News** (4 lớp): World, Sports, Business, Sci/Tech. Code tải qua Hugging Face Datasets và lấy một subset nhỏ để demo chạy nhanh.
+Sử dụng `TfidfVectorizer` với cấu hình giống notebook:
+- `max_features=5000`
+- `ngram_range=(1, 2)`
+- `stop_words='english'`
 
-## Phương pháp
+### 2) KNN với cosine similarity (chuẩn hoá L2)
 
-### Biểu diễn văn bản
+Thay vì Euclidean distance trực tiếp trên TF‑IDF, ta chuẩn hoá mỗi vector về độ dài 1 và dùng tích vô hướng để tính cosine:
 
-Văn bản được vector hoá bằng TF‑IDF với:
+$$\text{cosine}(x, y) = \frac{x \cdot y}{\|x\|\,\|y\|}$$
 
-- `max_features = 5000`
-- `ngram_range = (1, 2)`
-- `stop_words = 'english'`
+Trong code:
+- Dữ liệu train được chuẩn hoá trước (`X_train_norm`).
+- Với mỗi batch dữ liệu đầu vào, chuẩn hoá rồi tính ma trận similarity bằng `np.dot(X_norm, X_train_norm.T)`.
 
-### Cosine similarity
+### 3) “Optimized” top‑k
 
-Với 2 vector $u, v$:
+Hai phiên bản chọn láng giềng khác nhau:
+- `KNN_Optimized`: dùng `np.argsort(...)[..., -k:]` (đơn giản, dễ hiểu).
+- `KNN_WeightedCosine`: dùng `np.argpartition(..., -k)` để lấy top‑k nhanh hơn (không cần sort toàn bộ).
 
-$$
-\mathrm{cos}(u, v) = \frac{u\cdot v}{\lVert u\rVert\,\lVert v\rVert}
-$$
+### 4) Weighted voting theo cosine
 
-Trong code, các vector được chuẩn hoá $\ell_2$ để việc tính cosine trở thành tích vô hướng.
+Ở `KNN_WeightedCosine`, mỗi láng giềng đóng góp một trọng số bằng similarity.
+Để ổn định hơn, code đang **clip trọng số về không âm**:
+
+$$w = \max(\text{cosine}, 0)$$
+
+Điểm của mỗi lớp là tổng trọng số các láng giềng thuộc lớp đó, dự đoán lấy lớp có điểm cao nhất.
 
 ### Baseline: KNN majority vote
 
@@ -61,34 +67,78 @@ Nếu cần xác suất, chuẩn hoá các score theo tổng score của mọi l
 
 Triển khai tại module `KNNWeightedCosine`.
 
-## Tái lập thực nghiệm
+## Dataset & thiết lập thực nghiệm
 
-### Cài đặt
+### IMDb
+- Nguồn: HuggingFace `datasets` (`load_dataset("imdb")`)
+- Label: `0 = negative`, `1 = positive`
+- Mặc định chạy nhanh (theo notebook): `train_size=25000`, `test_size=3000`
+- Train được shuffle rồi chọn subset; đồng thời tách thêm validation 20% (đang giữ để giống notebook, nhưng script hiện chỉ đánh giá trên test).
+
+### AG News
+- Nguồn: HuggingFace `datasets` (`load_dataset("ag_news")`)
+- Label: `0=World, 1=Sports, 2=Business, 3=Sci/Tech`
+- Mặc định chạy nhanh (theo notebook): `train_size=8000`, `test_size=600`
+
+## Cài đặt
+
+Yêu cầu: Python 3.10+
 
 ```bash
-python -m venv .venv
-# Windows PowerShell
-.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 ```
 
-### Chạy
+Tuỳ chọn (cài dạng editable để import package thuận tiện):
 
 ```bash
-python -m knn_weight.experiment
+pip install -e .
 ```
 
-Tuỳ chọn:
+## Chạy thực nghiệm (reproduce)
+
+### IMDb
 
 ```bash
-python -m knn_weight.experiment --k 5 --train-size 8000 --test-size 600 --max-features 5000
+python scripts/run_imdb.py --train-size 25000 --test-size 3000 --k 5
 ```
 
-Lưu ý: Implement hiện tại densify TF‑IDF (`toarray()`) để tính cosine nhanh bằng `numpy.dot`. Với tập dữ liệu lớn hơn hoặc `max_features` lớn, có thể tốn RAM.
+### AG News
 
-## Cấu trúc mã nguồn
+```bash
+python scripts/run_agnews.py --train-size 8000 --test-size 600 --k 5
+```
 
-- `knn_weight/data.py`: tải AG News + tách train/val/test
-- `knn_weight/vectorize.py`: TF‑IDF features
-- `knn_weight/models.py`: hai biến thể KNN (majority vote và weighted cosine)
-- `knn_weight/experiment.py`: pipeline chạy thử và in accuracy
+Gợi ý lưu log kết quả ra file:
+
+```bash
+python scripts/run_imdb.py --k 5 > results_imdb.txt
+python scripts/run_agnews.py --k 5 > results_agnews.txt
+```
+
+## Kết quả thực nghiệm
+
+Kết quả phụ thuộc vào:
+- Subset size (train/test)
+- Tham số `k`
+- Môi trường chạy (phiên bản thư viện, máy tính)
+
+Bạn có thể chạy các lệnh ở trên rồi điền vào bảng sau (accuracy trên test):
+
+| Dataset | Train/Test | k | KNN acc | KNN_Weighted acc |
+|---|---:|---:|---:|---:|
+| IMDb | 25000 / 3000 | 5 | (điền) | (điền) |
+| AG News | 8000 / 600 | 5 | (điền) | (điền) |
+
+Nếu bạn muốn so sánh nhiều giá trị `k`, chỉ cần chạy lại với `--k 1`, `--k 3`, `--k 5`, `--k 7`, ...
+
+## Cấu trúc thư mục
+
+- `src/knn_weight/knn.py`: 2 mô hình `KNN_Optimized`, `KNN_WeightedCosine`
+- `src/knn_weight/data.py`: load dataset (IMDb, AG News)
+- `src/knn_weight/vectorize.py`: TF‑IDF vectorizer
+- `scripts/run_imdb.py`, `scripts/run_agnews.py`: entrypoints chạy thực nghiệm
+
+## Hạn chế / lưu ý
+
+- Hiện tại code gọi `toarray()` trước khi tính cosine để giống notebook; nếu tăng `train_size` lớn có thể tốn RAM.
+- Lần đầu chạy sẽ tải dataset từ HuggingFace `datasets`.
