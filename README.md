@@ -126,8 +126,8 @@ Bạn có thể chạy các lệnh ở trên rồi điền vào bảng sau (accu
 
 | Dataset | Train/Test | k | KNN acc | KNN_Weighted acc |
 |---|---:|---:|---:|---:|
-| IMDb | 25000 / 3000 | 5 | (điền) | (điền) |
-| AG News | 8000 / 600 | 5 | (điền) | (điền) |
+| IMDb | 25000 / 3000 | 5 | 0.6517 | 0.6523 |
+| AG News | 8000 / 600 | 5 | 0.8417 | 0.8600 |
 
 Nếu bạn muốn so sánh nhiều giá trị `k`, chỉ cần chạy lại với `--k 1`, `--k 3`, `--k 5`, `--k 7`, ...
 
